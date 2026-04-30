@@ -1,0 +1,1642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Body Vector Pattern Engine</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #030508;
+    --panel-bg: rgba(4, 10, 20, 0.82);
+    --border: rgba(0, 200, 255, 0.18);
+    --accent: #00c8ff;
+    --accent2: #ff3cac;
+    --accent3: #7fff00;
+    --text: #c8e8ff;
+    --text-dim: rgba(180,220,255,0.45);
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Rajdhani', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+  }
+
+  /* ── CAMERA SETUP SCREEN ── */
+  #setup-screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #030508;
+    z-index: 100;
+    gap: 32px;
+  }
+  #setup-screen.hidden { display: none; }
+
+  .setup-logo {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .setup-title {
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    background: linear-gradient(135deg, #00c8ff 0%, #ff3cac 50%, #7fff00 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+  }
+  .setup-sub {
+    font-size: 14px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-align: center;
+    max-width: 380px;
+    line-height: 1.7;
+  }
+  .setup-features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    max-width: 480px;
+    width: 100%;
+  }
+  .feat-chip {
+    background: rgba(0,200,255,0.06);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .feat-chip .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)}
+  }
+  .start-btn {
+    padding: 14px 48px;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    transition: color 0.3s;
+  }
+  .start-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+    z-index: -1;
+  }
+  .start-btn:hover { color: #030508; }
+  .start-btn:hover::before { transform: scaleX(1); }
+  .start-btn:active { transform: scale(0.97); }
+
+  /* ── MAIN APP ── */
+  #app { position: fixed; inset: 0; display: none; }
+  #app.visible { display: block; }
+
+  #videoEl {
+    position: absolute;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    opacity: 0;
+  }
+
+  #videoCanvas, #vectorCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+  }
+
+  #vectorCanvas { mix-blend-mode: screen; }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    background: var(--panel-bg);
+    border-bottom: 0.5px solid var(--border);
+    backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+    z-index: 50;
+  }
+  .topbar-brand {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .topbar-sep { width: 1px; height: 24px; background: var(--border); }
+
+  .mode-btn {
+    padding: 5px 14px;
+    background: transparent;
+    border: 0.5px solid var(--border);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .mode-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,200,255,0.08);
+    box-shadow: 0 0 12px rgba(0,200,255,0.2);
+  }
+  .mode-btn:hover:not(.active) {
+    border-color: rgba(0,200,255,0.4);
+    color: var(--text);
+  }
+
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .fps-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent3);
+    letter-spacing: 0.05em;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #444;
+    transition: background 0.3s;
+  }
+  .status-dot.active {
+    background: var(--accent3);
+    box-shadow: 0 0 8px var(--accent3);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  .export-btn {
+    padding: 5px 14px;
+    background: rgba(255,60,172,0.1);
+    border: 0.5px solid rgba(255,60,172,0.4);
+    color: var(--accent2);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    border-radius: 3px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .export-btn:hover {
+    background: rgba(255,60,172,0.2);
+    box-shadow: 0 0 12px rgba(255,60,172,0.3);
+  }
+
+  /* ── HUD PANEL ── */
+  #hud {
+    position: absolute;
+    top: 62px;
+    right: 16px;
+    width: 270px;
+    background: var(--panel-bg);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    backdrop-filter: blur(20px);
+    z-index: 50;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  #hud.collapsed .hud-body { display: none; }
+
+  .hud-header {
+    padding: 10px 14px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+  }
+  .hud-header-title {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .hud-toggle {
+    font-size: 10px;
+    color: var(--text-dim);
+    transition: transform 0.2s;
+  }
+  #hud.collapsed .hud-toggle { transform: rotate(180deg); }
+
+  .hud-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+  .hud-section-label {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  /* Joints table */
+  .joints-scroll {
+    max-height: 180px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .joint-row {
+    display: grid;
+    grid-template-columns: 90px 44px 52px 50px;
+    gap: 4px;
+    padding: 3px 0;
+    border-bottom: 0.5px solid rgba(0,200,255,0.05);
+    align-items: center;
+    transition: background 0.15s;
+  }
+  .joint-row.changed { background: rgba(0,200,255,0.06); }
+  .joint-row .jn { color: var(--text-dim); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .joint-row .ja { color: var(--accent); font-size: 10px; text-align: right; }
+  .joint-row .jl { color: var(--text-dim); font-size: 10px; text-align: right; }
+  .joint-arc { width: 18px; height: 18px; }
+
+  /* Active vectors */
+  .vec-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    border-bottom: 0.5px solid rgba(0,200,255,0.05);
+  }
+  .vec-bar-track { flex: 1; height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; }
+  .vec-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.2s; }
+  .vec-name { font-size: 10px; color: var(--text-dim); width: 70px; }
+  .vec-val { font-size: 10px; color: var(--accent); width: 36px; text-align: right; }
+
+  /* Body geometry */
+  .geo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .geo-card {
+    background: rgba(0,200,255,0.04);
+    border: 0.5px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 9px;
+  }
+  .geo-label { font-size: 9px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+  .geo-val { font-size: 14px; color: var(--accent); font-family: var(--mono); }
+
+  /* Settings */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .setting-label { font-size: 10px; color: var(--text-dim); }
+  .setting-row input[type=range] {
+    width: 90px;
+    accent-color: var(--accent);
+    height: 3px;
+  }
+  .setting-val { font-size: 10px; color: var(--accent); width: 28px; text-align: right; }
+
+  /* Mirror toggle */
+  .toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .toggle-switch {
+    width: 28px; height: 15px;
+    background: rgba(0,200,255,0.1);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    position: relative;
+    transition: background 0.2s;
+    cursor: pointer;
+  }
+  .toggle-switch.on { background: rgba(0,200,255,0.25); border-color: var(--accent); }
+  .toggle-switch .knob {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.2s, background 0.2s;
+  }
+  .toggle-switch.on .knob { transform: translateX(13px); background: var(--accent); }
+
+  /* ── BOTTOM LEFT INFO ── */
+  #bottom-info {
+    position: absolute;
+    bottom: 16px; left: 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    line-height: 1.8;
+    z-index: 50;
+  }
+
+  /* ── LOADING OVERLAY ── */
+  #loading-overlay {
+    position: absolute; inset: 0;
+    background: rgba(3,5,8,0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 80;
+    gap: 20px;
+  }
+  #loading-overlay.hidden { display: none; }
+  .loader-ring {
+    width: 60px; height: 60px;
+    border: 1px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .loader-sub { font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; }
+
+  /* ── SCAN LINE EFFECT ── */
+  #scanlines {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 40;
+  }
+
+  /* ── CORNER DECORATIONS ── */
+  .corner {
+    position: absolute;
+    width: 20px; height: 20px;
+    z-index: 45;
+    pointer-events: none;
+  }
+  .corner.tl { top: 62px; left: 10px; border-top: 1px solid var(--accent); border-left: 1px solid var(--accent); }
+  .corner.tr { top: 62px; right: 10px; border-top: 1px solid var(--accent); border-right: 1px solid var(--accent); }
+  .corner.bl { bottom: 10px; left: 10px; border-bottom: 1px solid var(--accent); border-left: 1px solid var(--accent); }
+  .corner.br { bottom: 10px; right: 10px; border-bottom: 1px solid var(--accent); border-right: 1px solid var(--accent); }
+
+  /* ── PALETTE SELECTOR ── */
+  .palette-row { display: flex; gap: 6px; align-items: center; }
+  .pal-swatch {
+    width: 18px; height: 18px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .pal-swatch.active { border-color: #fff; transform: scale(1.2); }
+  .pal-swatch:hover:not(.active) { transform: scale(1.1); }
+
+  /* Error toast */
+  #error-toast {
+    position: absolute;
+    bottom: 60px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,60,60,0.12);
+    border: 0.5px solid rgba(255,60,60,0.4);
+    color: #ff7070;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 10px 20px;
+    border-radius: 6px;
+    z-index: 100;
+    display: none;
+    letter-spacing: 0.1em;
+  }
+
+  .rec-indicator {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent2);
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse-dot 0.8s ease-in-out infinite;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ SETUP SCREEN ═══ -->
+<div id="setup-screen">
+  <div>
+    <div class="setup-logo">Advanced Motion System</div>
+    <div class="setup-title">BODY VECTOR<br>PATTERN ENGINE</div>
+  </div>
+  <div class="setup-sub">
+    Real-time body tracking that converts every joint movement into mathematical vector geometry — angles, dimensions, and dynamic patterns.
+  </div>
+  <div class="setup-features">
+    <div class="feat-chip"><span class="dot"></span>75 Landmark Points</div>
+    <div class="feat-chip"><span class="dot"></span>Joint Angle Math</div>
+    <div class="feat-chip"><span class="dot"></span>4 Pattern Modes</div>
+    <div class="feat-chip"><span class="dot"></span>Live HUD Readouts</div>
+    <div class="feat-chip"><span class="dot"></span>Vector Export SVG</div>
+    <div class="feat-chip"><span class="dot"></span>HSL Color Encoding</div>
+  </div>
+  <button class="start-btn" id="startBtn">INITIALISE CAMERA</button>
+  <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:0.15em;">
+    REQUIRES WEBCAM · MEDIAPIPE HOLISTIC v0.5
+  </div>
+</div>
+
+<!-- ═══ MAIN APP ═══ -->
+<div id="app">
+  <video id="videoEl" playsinline muted></video>
+  <canvas id="videoCanvas"></canvas>
+  <canvas id="vectorCanvas"></canvas>
+
+  <!-- Scan lines overlay -->
+  <div id="scanlines"></div>
+
+  <!-- Corner decorations -->
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div class="loader-ring"></div>
+    <div class="loader-text">Loading MediaPipe</div>
+    <div class="loader-sub">INITIALISING HOLISTIC MODEL...</div>
+  </div>
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <div class="topbar-brand">⬡ VecMo</div>
+    <div class="topbar-sep"></div>
+    <button class="mode-btn active" data-mode="SKELETON">Skeleton</button>
+    <button class="mode-btn" data-mode="GEOMETRIC">Geometric</button>
+    <button class="mode-btn" data-mode="MANDALA">Mandala</button>
+    <button class="mode-btn" data-mode="TRAIL">Trail</button>
+    <div class="topbar-right">
+      <span class="fps-badge" id="fpsBadge">-- FPS</span>
+      <div class="status-dot" id="statusDot"></div>
+      <button class="export-btn" id="exportSvgBtn">⬇ SVG</button>
+      <button class="export-btn" id="exportPngBtn">⬇ PNG</button>
+    </div>
+  </div>
+
+  <!-- HUD Panel -->
+  <div id="hud">
+    <div class="hud-header" id="hudHeader">
+      <span class="hud-header-title">VECTOR DATA HUD</span>
+      <span class="hud-toggle">▲</span>
+    </div>
+    <div class="hud-body">
+
+      <!-- Section: Joint Angles -->
+      <div>
+        <div class="hud-section-label">JOINT ANGLES</div>
+        <div class="joints-scroll" id="jointsTable"></div>
+      </div>
+
+      <!-- Section: Active Vectors -->
+      <div>
+        <div class="hud-section-label">TOP ACTIVE JOINTS</div>
+        <div id="activeVectors"></div>
+      </div>
+
+      <!-- Section: Body Geometry -->
+      <div>
+        <div class="hud-section-label">BODY GEOMETRY</div>
+        <div class="geo-grid" id="geoGrid">
+          <div class="geo-card"><div class="geo-label">Shoulder W</div><div class="geo-val" id="geoShoulder">--°</div></div>
+          <div class="geo-card"><div class="geo-label">Arm Span</div><div class="geo-val" id="geoArmSpan">--°</div></div>
+          <div class="geo-card"><div class="geo-label">Spine Angle</div><div class="geo-val" id="geoSpine">--°</div></div>
+          <div class="geo-card"><div class="geo-label">Hip Width</div><div class="geo-val" id="geoHip">--°</div></div>
+        </div>
+      </div>
+
+      <!-- Section: Palette -->
+      <div>
+        <div class="hud-section-label">COLOR PALETTE</div>
+        <div class="palette-row" id="paletteRow">
+          <div class="pal-swatch active" data-palette="0" style="background:linear-gradient(135deg,#00c8ff,#ff3cac)"></div>
+          <div class="pal-swatch" data-palette="1" style="background:linear-gradient(135deg,#7fff00,#00ffd5)"></div>
+          <div class="pal-swatch" data-palette="2" style="background:linear-gradient(135deg,#ff9500,#ff3cac)"></div>
+          <div class="pal-swatch" data-palette="3" style="background:linear-gradient(135deg,#ffffff,#aaaaaa)"></div>
+        </div>
+      </div>
+
+      <!-- Section: Settings -->
+      <div>
+        <div class="hud-section-label">SETTINGS</div>
+        <div class="setting-row">
+          <span class="setting-label">Confidence</span>
+          <input type="range" id="confSlider" min="40" max="90" value="60">
+          <span class="setting-val" id="confVal">0.60</span>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Opacity</span>
+          <input type="range" id="opacitySlider" min="10" max="100" value="85">
+          <span class="setting-val" id="opacityVal">85%</span>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Line Width</span>
+          <input type="range" id="widthSlider" min="1" max="5" value="2" step="0.5">
+          <span class="setting-val" id="widthVal">2</span>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Mirror Mode</span>
+          <div class="toggle-switch" id="mirrorToggle"><div class="knob"></div></div>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Show Nodes</span>
+          <div class="toggle-switch on" id="nodesToggle"><div class="knob"></div></div>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Show Digits</span>
+          <div class="toggle-switch on" id="digitsToggle"><div class="knob"></div></div>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Digit Size</span>
+          <input type="range" id="digitSizeSlider" min="8" max="16" value="11">
+          <span class="setting-val" id="digitSizeVal">11</span>
+        </div>
+      </div>
+    </div>
+
+    </div>
+  </div>
+
+  <!-- Bottom info -->
+  <div id="bottom-info">
+    <div id="infoLine1">POSE LANDMARKS: --</div>
+    <div id="infoLine2">HAND LANDMARKS: --</div>
+    <div id="infoLine3">VECTORS ACTIVE: --</div>
+    <div id="infoLine4">FRAME TIME: -- ms</div>
+  </div>
+
+  <div id="error-toast"></div>
+</div>
+
+<!-- MediaPipe via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  BLOCK 3 CONSTANTS — POSE CONNECTIONS
+// ════════════════════════════════════════════════════════
+const POSE_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,7],[0,4],[4,5],[5,6],[6,8],
+  [9,10],[11,12],[11,13],[13,15],[15,17],[15,19],[15,21],
+  [17,19],[12,14],[14,16],[16,18],[16,20],[16,22],[18,20],
+  [11,23],[12,24],[23,24],[23,25],[24,26],[25,27],[26,28],
+  [27,29],[28,30],[29,31],[30,32],[27,31],[28,32]
+];
+
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+  [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
+  [0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]
+];
+
+const JOINT_TRIPLETS = [
+  { name: 'L_ELBOW',  a:11, b:13, c:15 },
+  { name: 'R_ELBOW',  a:12, b:14, c:16 },
+  { name: 'L_SHOULDER',a:13, b:11, c:23 },
+  { name: 'R_SHOULDER',a:14, b:12, c:24 },
+  { name: 'L_HIP',    a:11, b:23, c:25 },
+  { name: 'R_HIP',    a:12, b:24, c:26 },
+  { name: 'L_KNEE',   a:23, b:25, c:27 },
+  { name: 'R_KNEE',   a:24, b:26, c:28 },
+  { name: 'L_ANKLE',  a:25, b:27, c:29 },
+  { name: 'R_ANKLE',  a:26, b:28, c:30 },
+  { name: 'L_WRIST',  a:13, b:15, c:17 },
+  { name: 'R_WRIST',  a:14, b:16, c:18 },
+];
+
+// ════════════════════════════════════════════════════════
+//  BLOCK 2 — VECTOR MATH ENGINE
+// ════════════════════════════════════════════════════════
+const VectorMath = {
+
+  // Angle between 3 joints (degrees)
+  angleBetweenJoints(a, b, c) {
+    const BAx = a.x - b.x, BAy = a.y - b.y;
+    const BCx = c.x - b.x, BCy = c.y - b.y;
+    const dot = BAx * BCx + BAy * BCy;
+    const magBA = Math.sqrt(BAx*BAx + BAy*BAy);
+    const magBC = Math.sqrt(BCx*BCx + BCy*BCy);
+    if (magBA < 1e-6 || magBC < 1e-6) return 0;
+    const cosA = Math.max(-1, Math.min(1, dot / (magBA * magBC)));
+    return Math.acos(cosA) * (180 / Math.PI);
+  },
+
+  // Euclidean distance
+  segmentLength(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return Math.sqrt(dx*dx + dy*dy);
+  },
+
+  // 2D screen direction
+  limbDirection(a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    return { angle: (angle + 360) % 360, unit_vec: len > 0 ? [dx/len, dy/len] : [0,0] };
+  },
+
+  // Compute all joint data for this frame
+  jointToJointMatrix(landmarks, w, h) {
+    return JOINT_TRIPLETS.map(({ name, a, b, c }) => {
+      if (!landmarks[a] || !landmarks[b] || !landmarks[c]) return null;
+      const pa = { x: landmarks[a].x * w, y: landmarks[a].y * h };
+      const pb = { x: landmarks[b].x * w, y: landmarks[b].y * h };
+      const pc = { x: landmarks[c].x * w, y: landmarks[c].y * h };
+      const angle = this.angleBetweenJoints(pa, pb, pc);
+      const length = this.segmentLength(pa, pb);
+      const dir = this.limbDirection(pa, pb);
+      return {
+        joint: name,
+        angle: Math.round(angle * 10) / 10,
+        length: Math.round(length * 10) / 10,
+        vec: dir.unit_vec,
+        dir_angle: Math.round(dir.angle * 10) / 10,
+        px: pb.x, py: pb.y,
+        confidence: (landmarks[b].visibility || 0)
+      };
+    }).filter(Boolean);
+  },
+
+  // Map joint angle to geometric path type
+  skeletonToPattern(jointMatrix) {
+    return jointMatrix.map(jd => {
+      let type;
+      if (jd.angle < 30) type = 'spoke';
+      else if (jd.angle < 90) type = 'arc';
+      else if (jd.angle < 150) type = 'lissajous';
+      else type = 'ray';
+      return { ...jd, type };
+    });
+  },
+
+  // angle → HSL color (palette-aware)
+  angleToColor(angle, palette, alpha = 1) {
+    const palettes = [
+      // 0: Cyan-Magenta
+      (a) => `hsla(${a * 2}, 90%, 60%, ${alpha})`,
+      // 1: Green-Teal
+      (a) => `hsla(${100 + a}, 90%, 55%, ${alpha})`,
+      // 2: Orange-Pink
+      (a) => `hsla(${10 + a * 0.5}, 85%, 60%, ${alpha})`,
+      // 3: White-Gray
+      (a) => `hsla(210, 20%, ${50 + a * 0.2}%, ${alpha})`,
+    ];
+    return (palettes[palette] || palettes[0])(angle % 360);
+  }
+};
+
+// ════════════════════════════════════════════════════════
+//  STATE (Zustand-equivalent — plain reactive store)
+// ════════════════════════════════════════════════════════
+const store = {
+  poseData: [],
+  leftHandData: [],
+  rightHandData: [],
+  jointMatrix: [],
+  pathData: [],
+  prevJointMatrix: [],
+  mode: 'SKELETON',
+  palette: 0,
+  confidence: 0.6,
+  opacity: 0.85,
+  lineWidth: 2,
+  mirror: false,
+  showNodes: true,
+  showDigits: true,
+  digitSize: 11,
+  fps: 0,
+  frameTime: 0,
+  trailFrames: [],
+  trailDigits: new Map(),   // joint name → [{x,y,angle,alpha}]
+  isTracking: false,
+  frameCount: 0,
+  lastFpsTime: performance.now(),
+};
+
+// ════════════════════════════════════════════════════════
+//  BLOCK 4 — VECTOR CANVAS RENDERER
+// ════════════════════════════════════════════════════════
+const Renderer = {
+  videoCtx: null,
+  vecCtx: null,
+  W: 0, H: 0,
+
+  init(videoCanvas, vectorCanvas) {
+    this.videoCtx = videoCanvas.getContext('2d');
+    this.vecCtx = vectorCanvas.getContext('2d');
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+  },
+
+  resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth, h = window.innerHeight;
+    this.W = w; this.H = h;
+    [document.getElementById('videoCanvas'), document.getElementById('vectorCanvas')].forEach(c => {
+      c.width = w * dpr; c.height = h * dpr;
+      c.style.width = w + 'px'; c.style.height = h + 'px';
+      c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    });
+  },
+
+  drawFrame(videoEl) {
+    const ctx = this.videoCtx;
+    ctx.save();
+    if (store.mirror) {
+      ctx.translate(this.W, 0);
+      ctx.scale(-1, 1);
+    } else {
+      ctx.translate(this.W, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(videoEl, 0, 0, this.W, this.H);
+    ctx.restore();
+  },
+
+  drawVectors() {
+    const ctx = this.vecCtx;
+    const W = this.W, H = this.H;
+    const op = store.opacity;
+    const lw = store.lineWidth;
+    const mode = store.mode;
+
+    if (mode !== 'TRAIL') {
+      ctx.clearRect(0, 0, W, H);
+    } else {
+      ctx.fillStyle = 'rgba(3,5,8,0.08)';
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    const pose = store.poseData;
+    const lHand = store.leftHandData;
+    const rHand = store.rightHandData;
+    const paths = store.pathData;
+
+    if (!pose.length) return;
+
+    // Mirror transform
+    ctx.save();
+    if (!store.mirror) {
+      ctx.translate(W, 0);
+      ctx.scale(-1, 1);
+    }
+
+    if (mode === 'SKELETON') {
+      this._drawSkeleton(ctx, pose, lHand, rHand, W, H, op, lw);
+    } else if (mode === 'GEOMETRIC') {
+      this._drawGeometric(ctx, paths, W, H, op, lw);
+    } else if (mode === 'MANDALA') {
+      this._drawMandala(ctx, paths, W, H, op, lw);
+    } else if (mode === 'TRAIL') {
+      this._drawGeometric(ctx, paths, W, H, op * 0.7, lw);
+    }
+
+    // Always draw joint nodes
+    if (store.showNodes) {
+      this._drawJointNodes(ctx, pose, W, H, op);
+    }
+
+    // Angle arcs (thin arc glyph at each joint)
+    this._drawAngleArcs(ctx, store.jointMatrix, op);
+
+    // PROMPT A: Angle digits fused with pattern shapes
+    store.pathData.forEach(jd => {
+      this.drawAngleDigit(ctx, jd, store.palette);
+    });
+
+    // PROMPT B: Hand finger angle digits
+    this.drawHandDigits(ctx, store.leftHandData,  0, W, H);
+    this.drawHandDigits(ctx, store.rightHandData, 1, W, H);
+
+    // PROMPT C: Mandala digit ring (only in mandala mode)
+    if (mode === 'MANDALA') {
+      this.drawMandalaDigitRing(ctx, store.pathData, W, H, store.palette);
+    }
+
+    ctx.restore();
+  },
+
+  _drawSkeleton(ctx, pose, lHand, rHand, W, H, op, lw) {
+    // Pose connections
+    POSE_CONNECTIONS.forEach(([i, j]) => {
+      if (!pose[i] || !pose[j]) return;
+      const v = Math.max(pose[i].visibility || 0, pose[j].visibility || 0);
+      if (v < store.confidence) return;
+      const angle = VectorMath.angleBetweenJoints(
+        { x: pose[i].x * W, y: pose[i].y * H },
+        { x: (pose[i].x + pose[j].x) * 0.5 * W, y: (pose[i].y + pose[j].y) * 0.5 * H },
+        { x: pose[j].x * W, y: pose[j].y * H }
+      );
+      ctx.beginPath();
+      ctx.strokeStyle = VectorMath.angleToColor(angle + i * 12, store.palette, op * 0.9);
+      ctx.lineWidth = lw;
+      ctx.lineCap = 'round';
+      ctx.moveTo(pose[i].x * W, pose[i].y * H);
+      ctx.lineTo(pose[j].x * W, pose[j].y * H);
+      ctx.stroke();
+    });
+
+    // Hands
+    [lHand, rHand].forEach((hand, hi) => {
+      if (!hand || !hand.length) return;
+      HAND_CONNECTIONS.forEach(([i, j]) => {
+        if (!hand[i] || !hand[j]) return;
+        ctx.beginPath();
+        const hue = hi === 0 ? 180 + i * 8 : 300 + i * 8;
+        ctx.strokeStyle = VectorMath.angleToColor(hue, store.palette, op);
+        ctx.lineWidth = lw * 0.7;
+        ctx.lineCap = 'round';
+        ctx.moveTo(hand[i].x * W, hand[i].y * H);
+        ctx.lineTo(hand[j].x * W, hand[j].y * H);
+        ctx.stroke();
+      });
+    });
+  },
+
+  _drawGeometric(ctx, paths, W, H, op, lw) {
+    paths.forEach(pd => {
+      if (!pd || pd.confidence < store.confidence) return;
+      const color = VectorMath.angleToColor(pd.angle, store.palette, op);
+      const segLen = Math.max(20, Math.min(pd.length * 0.6, 120));
+
+      ctx.save();
+      ctx.translate(pd.px, pd.py);
+      ctx.rotate(pd.dir_angle * Math.PI / 180);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lw + pd.length / 120;
+      ctx.lineCap = 'round';
+
+      if (pd.type === 'spoke') {
+        // Tight radial spokes
+        for (let k = 0; k < 6; k++) {
+          ctx.save();
+          ctx.rotate(k * Math.PI / 3);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(segLen * 0.5, 0);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+      } else if (pd.type === 'arc') {
+        // Arc segment
+        ctx.beginPath();
+        ctx.arc(0, 0, segLen * 0.5, 0, (pd.angle / 180) * Math.PI);
+        ctx.stroke();
+
+      } else if (pd.type === 'lissajous') {
+        // Lissajous partial curve
+        ctx.beginPath();
+        const A = segLen * 0.5, B = segLen * 0.35;
+        const a = 3, b = 2;
+        for (let t = 0; t <= Math.PI * 2; t += 0.05) {
+          const x = A * Math.sin(a * t + pd.angle * 0.02);
+          const y = B * Math.sin(b * t);
+          t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+      } else {
+        // Extended ray
+        ctx.beginPath();
+        ctx.moveTo(-segLen * 0.2, 0);
+        ctx.lineTo(segLen, 0);
+        // Arrow head
+        ctx.moveTo(segLen - 10, -6);
+        ctx.lineTo(segLen, 0);
+        ctx.lineTo(segLen - 10, 6);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    });
+  },
+
+  _drawMandala(ctx, paths, W, H, op, lw) {
+    const cx = W / 2, cy = H / 2;
+    const symmetry = 8;
+    paths.forEach(pd => {
+      if (!pd || pd.confidence < store.confidence) return;
+      const color = VectorMath.angleToColor(pd.angle, store.palette, op * 0.8);
+      const dx = pd.px - cx, dy = pd.py - cy;
+      const segLen = Math.max(20, Math.min(pd.length * 0.5, 100));
+
+      for (let k = 0; k < symmetry; k++) {
+        const rotation = (k / symmetry) * Math.PI * 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rotation);
+        ctx.translate(dx * 0.5, dy * 0.5);
+        ctx.rotate(pd.dir_angle * Math.PI / 180);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lw;
+        ctx.lineCap = 'round';
+
+        if (pd.type === 'arc') {
+          ctx.beginPath();
+          ctx.arc(0, 0, segLen * 0.4, 0, (pd.angle / 180) * Math.PI);
+          ctx.stroke();
+        } else if (pd.type === 'lissajous') {
+          ctx.beginPath();
+          const A = segLen * 0.4, B = segLen * 0.25;
+          for (let t = 0; t <= Math.PI; t += 0.08) {
+            const x = A * Math.sin(2 * t + pd.angle * 0.01);
+            const y = B * Math.sin(3 * t);
+            t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(segLen, 0);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Mirror arm
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rotation);
+        ctx.scale(1, -1);
+        ctx.translate(dx * 0.5, dy * 0.5);
+        ctx.rotate(pd.dir_angle * Math.PI / 180);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lw;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (pd.type === 'arc') {
+          ctx.arc(0, 0, segLen * 0.4, 0, (pd.angle / 180) * Math.PI);
+        } else {
+          ctx.moveTo(0, 0);
+          ctx.lineTo(segLen, 0);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+  },
+
+  _drawJointNodes(ctx, pose, W, H, op) {
+    if (!pose.length) return;
+    pose.forEach((lm, i) => {
+      if (!lm || (lm.visibility || 0) < store.confidence) return;
+      const r = 3 + (lm.visibility || 0) * 3;
+      ctx.beginPath();
+      ctx.arc(lm.x * W, lm.y * H, r, 0, Math.PI * 2);
+      ctx.fillStyle = VectorMath.angleToColor(i * 12, store.palette, op * 0.8);
+      ctx.fill();
+    });
+  },
+
+  _drawAngleArcs(ctx, jointMatrix, op) {
+    jointMatrix.forEach(jd => {
+      if (!jd || jd.confidence < store.confidence) return;
+      const r = 18;
+      ctx.save();
+      ctx.translate(jd.px, jd.py);
+      ctx.beginPath();
+      ctx.strokeStyle = VectorMath.angleToColor(jd.angle, store.palette, op * 0.5);
+      ctx.lineWidth = 1;
+      ctx.arc(0, 0, r, -0.2, (jd.angle / 180) * Math.PI - 0.2);
+      ctx.stroke();
+      ctx.restore();
+    });
+  },
+
+  // ── PROMPT A: Per-type angle digit fused with pattern shape ──
+  drawAngleDigit(ctx, jd, palette) {
+    if (!store.showDigits) return;
+    if (!jd || jd.confidence < store.confidence) return;
+
+    const W = this.W, H = this.H;
+    const segLen = Math.max(20, Math.min(jd.length * 0.6, 120));
+    const rad = jd.dir_angle * Math.PI / 180;
+    const label = Math.round(jd.angle) + '°';
+    const fontSize = store.digitSize;
+
+    ctx.save();
+    ctx.font = `bold ${fontSize}px "Share Tech Mono", monospace`;
+    const pillW = Math.max(32, ctx.measureText(label).width + 14);
+    const pillH = fontSize + 7;
+
+    let digitX = jd.px, digitY = jd.py;
+
+    if (jd.type === 'spoke') {
+      // At 35% along first spoke
+      digitX = jd.px + Math.cos(rad) * segLen * 0.35;
+      digitY = jd.py + Math.sin(rad) * segLen * 0.35;
+    } else if (jd.type === 'arc') {
+      // Midpoint of arc — angle/2 from start, radius + 14px outward
+      const midRad = rad + (jd.angle / 2) * Math.PI / 180;
+      const arcR = segLen * 0.5;
+      digitX = jd.px + Math.cos(midRad) * (arcR + 14);
+      digitY = jd.py + Math.sin(midRad) * (arcR + 14);
+    } else if (jd.type === 'lissajous') {
+      // Peak at t=π/2, offset 14px above
+      const A = segLen * 0.5;
+      const lx = A * Math.sin(3 * Math.PI / 2 + jd.angle * 0.02);
+      const ly = (segLen * 0.35) * Math.sin(2 * Math.PI / 2);
+      digitX = jd.px + Math.cos(rad) * lx - Math.sin(rad) * ly;
+      digitY = jd.py + Math.sin(rad) * lx + Math.cos(rad) * ly - 14;
+    } else {
+      // Ray: 60% along ray, 12px above
+      digitX = jd.px + Math.cos(rad) * segLen * 0.6;
+      digitY = jd.py + Math.sin(rad) * segLen * 0.6 - 12;
+    }
+
+    // Clamp to canvas
+    digitX = Math.max(pillW / 2 + 4, Math.min(W - pillW / 2 - 4, digitX));
+    digitY = Math.max(pillH + 4, Math.min(H - 4, digitY));
+
+    const color = VectorMath.angleToColor(jd.angle, palette, 1);
+    const pillX = digitX - pillW / 2;
+    const pillY = digitY - pillH / 2;
+
+    // Pill background
+    ctx.beginPath();
+    const pr = 4;
+    ctx.moveTo(pillX + pr, pillY);
+    ctx.lineTo(pillX + pillW - pr, pillY);
+    ctx.quadraticCurveTo(pillX + pillW, pillY, pillX + pillW, pillY + pr);
+    ctx.lineTo(pillX + pillW, pillY + pillH - pr);
+    ctx.quadraticCurveTo(pillX + pillW, pillY + pillH, pillX + pillW - pr, pillY + pillH);
+    ctx.lineTo(pillX + pr, pillY + pillH);
+    ctx.quadraticCurveTo(pillX, pillY + pillH, pillX, pillY + pillH - pr);
+    ctx.lineTo(pillX, pillY + pr);
+    ctx.quadraticCurveTo(pillX, pillY, pillX + pr, pillY);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(3,5,8,0.78)';
+    ctx.fill();
+    ctx.strokeStyle = VectorMath.angleToColor(jd.angle, palette, 0.7);
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Glow pass
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 7;
+    ctx.font = `bold ${fontSize}px "Share Tech Mono", monospace`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, digitX, digitY);
+    ctx.restore();
+
+    // Sharp digit on top
+    ctx.font = `bold ${fontSize}px "Share Tech Mono", monospace`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, digitX, digitY);
+
+    // Trail digit ring buffer update (Prompt D)
+    if (store.mode === 'TRAIL') {
+      if (!store.trailDigits.has(jd.joint)) store.trailDigits.set(jd.joint, []);
+      const trail = store.trailDigits.get(jd.joint);
+      trail.forEach(e => { e.alpha *= 0.78; });
+      trail.unshift({ x: digitX, y: digitY, angle: jd.angle, alpha: 1.0 });
+      // Remove faded entries
+      while (trail.length > 0 && trail[trail.length - 1].alpha < 0.05) trail.pop();
+      // Draw echoes oldest first
+      for (let i = trail.length - 1; i > 0; i--) {
+        const e = trail[i];
+        ctx.save();
+        ctx.globalAlpha = e.alpha * 0.55;
+        ctx.font = `bold ${fontSize}px "Share Tech Mono", monospace`;
+        ctx.fillStyle = VectorMath.angleToColor(e.angle, palette, e.alpha);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.round(e.angle) + '°', e.x, e.y);
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  },
+
+  // ── PROMPT B: Hand finger angle digits ──
+  drawHandDigits(ctx, hand, handIndex, W, H) {
+    if (!store.showDigits || !hand || !hand.length) return;
+    const FINGER_TRIPLETS = [
+      { name: 'THUMB',  a:1,  b:2,  c:3  },
+      { name: 'INDEX',  a:5,  b:6,  c:7  },
+      { name: 'MIDDLE', a:9,  b:10, c:11 },
+      { name: 'RING',   a:13, b:14, c:15 },
+      { name: 'PINKY',  a:17, b:18, c:19 },
+    ];
+    FINGER_TRIPLETS.forEach(({ name, a, b, c }) => {
+      if (!hand[a] || !hand[b] || !hand[c]) return;
+      const va = hand[a].visibility, vb = hand[b].visibility, vc = hand[c].visibility;
+      if ((va||1) < store.confidence * 0.5 || (vb||1) < store.confidence * 0.5) return;
+      const pa = { x: hand[a].x * W, y: hand[a].y * H };
+      const pb = { x: hand[b].x * W, y: hand[b].y * H };
+      const pc = { x: hand[c].x * W, y: hand[c].y * H };
+      const angle = VectorMath.angleBetweenJoints(pa, pb, pc);
+      // Perpendicular offset from pb→pc midpoint
+      const mx = (pb.x + pc.x) * 0.5;
+      const my = (pb.y + pc.y) * 0.5;
+      const dx = pc.x - pb.x, dy = pc.y - pb.y;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      // Perpendicular: (-dy, dx) normalized
+      const px = -dy / len * 10, py = dx / len * 10;
+      const digitX = mx + px, digitY = my + py;
+      const hueShift = handIndex === 0 ? 60 : -60;
+      const color = VectorMath.angleToColor(angle + hueShift, store.palette, 0.9);
+      const label = Math.round(angle) + '°';
+      const fSize = Math.max(8, store.digitSize - 2);
+      ctx.save();
+      ctx.font = `bold ${fSize}px "Share Tech Mono", monospace`;
+      const pw = Math.max(26, ctx.measureText(label).width + 10);
+      const ph = fSize + 5;
+      // Small pill
+      const px2 = digitX - pw / 2, py2 = digitY - ph / 2;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(px2, py2, pw, ph, 3) : (() => { ctx.rect(px2, py2, pw, ph); })();
+      ctx.fillStyle = 'rgba(3,5,8,0.72)';
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, digitX, digitY);
+      ctx.restore();
+      ctx.restore();
+    });
+  },
+
+  // ── PROMPT C: Mandala digit ring ──
+  drawMandalaDigitRing(ctx, pathData, W, H, palette) {
+    if (!store.showDigits) return;
+    const cx = W / 2, cy = H / 2;
+    const ringRadius = Math.min(W, H) * 0.38;
+    pathData.forEach((pd, i) => {
+      if (!pd || pd.confidence < store.confidence) return;
+      const angle_rad = (i / pathData.length) * Math.PI * 2;
+      const dx = Math.cos(angle_rad) * ringRadius;
+      const dy = Math.sin(angle_rad) * ringRadius;
+      const label = Math.round(pd.angle) + '°';
+      const color = VectorMath.angleToColor(pd.angle, palette, 0.88);
+      // Thin spoke from center to digit
+      ctx.save();
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.4;
+      ctx.globalAlpha = 0.28;
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + dx * 0.82, cy + dy * 0.82);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 5;
+      ctx.font = `bold 10px "Share Tech Mono", monospace`;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, cx + dx, cy + dy);
+      ctx.restore();
+    });
+  }
+};
+
+// ════════════════════════════════════════════════════════
+//  BLOCK 5 — HUD UPDATER (throttled 10Hz)
+// ════════════════════════════════════════════════════════
+const HUD = {
+  lastUpdate: 0,
+
+  update(now) {
+    if (now - this.lastUpdate < 100) return; // 10Hz
+    this.lastUpdate = now;
+
+    const jm = store.jointMatrix;
+    if (!jm.length) return;
+
+    // Joints table
+    const table = document.getElementById('jointsTable');
+    if (table) {
+      table.innerHTML = jm.map((j, i) => {
+        const prev = store.prevJointMatrix[i];
+        const changed = prev && Math.abs(j.angle - prev.angle) > 5;
+        const arcR = 10;
+        const arcEnd = (j.angle / 180) * Math.PI;
+        const arcX2 = arcR + arcR * Math.cos(arcEnd);
+        const arcY2 = arcR - arcR * Math.sin(arcEnd);
+        const largeArc = j.angle > 90 ? 1 : 0;
+        const color = VectorMath.angleToColor(j.angle, store.palette, 1);
+        return `<div class="joint-row ${changed ? 'changed' : ''}">
+          <span class="jn">${j.joint}</span>
+          <span class="ja">${j.angle}°</span>
+          <span class="jl">${j.length}px</span>
+          <svg class="joint-arc" viewBox="0 0 22 22">
+            <path d="M ${arcR} ${arcR} L ${2*arcR} ${arcR} A ${arcR} ${arcR} 0 ${largeArc} 0 ${arcX2} ${arcR - arcR * Math.sin(arcEnd)}" 
+                  fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>`;
+      }).join('');
+    }
+
+    // Top active joints by motion
+    const top5 = [...jm].sort((a, b) => {
+      const pa = store.prevJointMatrix.find(p => p && p.joint === a.joint);
+      const pb = store.prevJointMatrix.find(p => p && p.joint === b.joint);
+      const da = pa ? Math.abs(a.angle - pa.angle) : 0;
+      const db = pb ? Math.abs(b.angle - pb.angle) : 0;
+      return db - da;
+    }).slice(0, 5);
+
+    const av = document.getElementById('activeVectors');
+    if (av) {
+      av.innerHTML = top5.map(j => {
+        const pct = Math.round((j.angle / 180) * 100);
+        const color = VectorMath.angleToColor(j.angle, store.palette, 1);
+        return `<div class="vec-row">
+          <span class="vec-name">${j.joint.replace('_', ' ')}</span>
+          <div class="vec-bar-track"><div class="vec-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+          <span class="vec-val" style="color:${color}">${j.angle}°</span>
+        </div>`;
+      }).join('');
+    }
+
+    // Body geometry
+    const getJoint = name => jm.find(j => j.joint === name);
+    const ls = getJoint('L_SHOULDER'), rs = getJoint('R_SHOULDER');
+    const la = getJoint('L_ELBOW'), ra = getJoint('R_ELBOW');
+    const sp = getJoint('L_HIP') || getJoint('R_HIP');
+    const lh = getJoint('L_HIP'), rh = getJoint('R_HIP');
+
+    if (ls && rs) {
+      const sw = Math.abs(ls.px - rs.px);
+      document.getElementById('geoShoulder').textContent = Math.round(sw) + 'px';
+    }
+    if (la && ra) {
+      const span = ((la.angle + ra.angle) / 2).toFixed(1);
+      document.getElementById('geoArmSpan').textContent = span + '°';
+    }
+    if (sp) {
+      document.getElementById('geoSpine').textContent = sp.angle.toFixed(1) + '°';
+    }
+    if (lh && rh) {
+      const hw = Math.abs(lh.px - rh.px);
+      document.getElementById('geoHip').textContent = Math.round(hw) + 'px';
+    }
+
+    // Bottom info
+    document.getElementById('infoLine1').textContent = `POSE LANDMARKS: ${store.poseData.length}`;
+    document.getElementById('infoLine2').textContent = `HAND LANDMARKS: ${store.leftHandData.length + store.rightHandData.length}`;
+    document.getElementById('infoLine3').textContent = `VECTORS ACTIVE: ${jm.filter(j => j.confidence >= store.confidence).length}`;
+    document.getElementById('infoLine4').textContent = `FRAME TIME: ${store.frameTime.toFixed(1)} ms`;
+
+    // Save prev
+    store.prevJointMatrix = [...jm];
+  }
+};
+
+// ════════════════════════════════════════════════════════
+//  BLOCK 5 — EXPORT UTILS
+// ════════════════════════════════════════════════════════
+const Exporter = {
+  exportSVG() {
+    const W = Renderer.W, H = Renderer.H;
+    const paths = store.pathData;
+    let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+<rect width="${W}" height="${H}" fill="#030508"/>
+<g transform="translate(${W},0) scale(-1,1)">`;
+
+    paths.forEach(pd => {
+      if (!pd || pd.confidence < store.confidence) return;
+      const color = VectorMath.angleToColor(pd.angle, store.palette, 1);
+      const segLen = Math.max(20, Math.min(pd.length * 0.6, 120));
+      const rad = pd.dir_angle * Math.PI / 180;
+      const x1 = pd.px, y1 = pd.py;
+      const x2 = x1 + Math.cos(rad) * segLen;
+      const y2 = y1 + Math.sin(rad) * segLen;
+      svgContent += `\n<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${color}" stroke-width="${store.lineWidth}" stroke-linecap="round"/>`;
+      svgContent += `\n<circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="4" fill="${color}" opacity="0.6"/>`;
+      svgContent += `\n<text x="${x1.toFixed(1)}" y="${(y1 - 8).toFixed(1)}" fill="${color}" font-size="9" font-family="monospace">${Math.round(pd.angle)}°</text>`;
+    });
+
+    svgContent += '\n</g></svg>';
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `vecmo-${Date.now()}.svg`; a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  exportPNG() {
+    const vCanvas = document.getElementById('videoCanvas');
+    const vecCanvas = document.getElementById('vectorCanvas');
+    const merged = document.createElement('canvas');
+    merged.width = vCanvas.width; merged.height = vCanvas.height;
+    const ctx = merged.getContext('2d');
+    ctx.drawImage(vCanvas, 0, 0);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.drawImage(vecCanvas, 0, 0);
+    merged.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `vecmo-${Date.now()}.png`; a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+};
+
+// ════════════════════════════════════════════════════════
+//  BLOCK 3 — MediaPipe HOLISTIC INTEGRATION
+// ════════════════════════════════════════════════════════
+let holistic = null;
+let camera = null;
+let animFrameId = null;
+let fpsFrames = 0;
+let lastFpsTime = performance.now();
+
+function initMediaPipe() {
+  holistic = new Holistic({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
+  });
+
+  holistic.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    enableSegmentation: false,
+    refineFaceLandmarks: false,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+
+  holistic.onResults(onResults);
+}
+
+function onResults(results) {
+  const frameStart = performance.now();
+  const W = Renderer.W, H = Renderer.H;
+
+  // Store landmarks
+  store.poseData = results.poseLandmarks || [];
+  store.leftHandData = results.leftHandLandmarks || [];
+  store.rightHandData = results.rightHandLandmarks || [];
+  store.isTracking = store.poseData.length > 0;
+
+  // Block 2: compute joint matrices
+  if (store.poseData.length) {
+    store.jointMatrix = VectorMath.jointToJointMatrix(store.poseData, W, H);
+    store.pathData = VectorMath.skeletonToPattern(store.jointMatrix);
+  }
+
+  // Render video frame
+  const videoEl = document.getElementById('videoEl');
+  Renderer.drawFrame(videoEl);
+
+  // Render vectors
+  Renderer.drawVectors();
+
+  // FPS calculation
+  fpsFrames++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) {
+    store.fps = fpsFrames;
+    fpsFrames = 0;
+    lastFpsTime = now;
+    document.getElementById('fpsBadge').textContent = store.fps + ' FPS';
+  }
+
+  store.frameTime = performance.now() - frameStart;
+  store.frameCount++;
+
+  // Status dot
+  document.getElementById('statusDot').className = 'status-dot' + (store.isTracking ? ' active' : '');
+
+  // HUD update
+  HUD.update(now);
+}
+
+// ════════════════════════════════════════════════════════
+//  BLOCK 6 — APP WIRING & INIT
+// ════════════════════════════════════════════════════════
+async function startApp() {
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('app').classList.add('visible');
+
+  const videoEl = document.getElementById('videoEl');
+  const videoCanvas = document.getElementById('videoCanvas');
+  const vectorCanvas = document.getElementById('vectorCanvas');
+
+  Renderer.init(videoCanvas, vectorCanvas);
+
+  const loadingOverlay = document.getElementById('loading-overlay');
+
+  try {
+    // Request camera
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      audio: false
+    });
+    videoEl.srcObject = stream;
+    await videoEl.play();
+
+    // Init MediaPipe
+    initMediaPipe();
+
+    // Use MediaPipe Camera util
+    camera = new Camera(videoEl, {
+      onFrame: async () => {
+        await holistic.send({ image: videoEl });
+      },
+      width: 1280, height: 720
+    });
+
+    await camera.start();
+    loadingOverlay.classList.add('hidden');
+
+  } catch (err) {
+    loadingOverlay.classList.add('hidden');
+    showError(err.name === 'NotAllowedError'
+      ? 'Camera permission denied. Please allow camera access.'
+      : 'Failed to initialise: ' + err.message);
+  }
+}
+
+function showError(msg) {
+  const toast = document.getElementById('error-toast');
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  setTimeout(() => toast.style.display = 'none', 5000);
+}
+
+// ── UI BINDINGS ──
+document.getElementById('startBtn').addEventListener('click', startApp);
+
+// Mode buttons
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    store.mode = btn.dataset.mode;
+    if (store.mode !== 'TRAIL') {
+      Renderer.vecCtx && Renderer.vecCtx.clearRect(0, 0, Renderer.W, Renderer.H);
+    }
+  });
+});
+
+// HUD collapse
+document.getElementById('hudHeader').addEventListener('click', () => {
+  document.getElementById('hud').classList.toggle('collapsed');
+});
+
+// Palette
+document.querySelectorAll('.pal-swatch').forEach(sw => {
+  sw.addEventListener('click', () => {
+    document.querySelectorAll('.pal-swatch').forEach(s => s.classList.remove('active'));
+    sw.classList.add('active');
+    store.palette = parseInt(sw.dataset.palette);
+  });
+});
+
+// Sliders
+document.getElementById('confSlider').addEventListener('input', function() {
+  store.confidence = this.value / 100;
+  document.getElementById('confVal').textContent = store.confidence.toFixed(2);
+});
+document.getElementById('opacitySlider').addEventListener('input', function() {
+  store.opacity = this.value / 100;
+  document.getElementById('opacityVal').textContent = this.value + '%';
+});
+document.getElementById('widthSlider').addEventListener('input', function() {
+  store.lineWidth = parseFloat(this.value);
+  document.getElementById('widthVal').textContent = this.value;
+});
+
+// Toggles
+document.getElementById('mirrorToggle').addEventListener('click', function() {
+  store.mirror = !store.mirror;
+  this.classList.toggle('on', store.mirror);
+});
+document.getElementById('nodesToggle').addEventListener('click', function() {
+  store.showNodes = !store.showNodes;
+  this.classList.toggle('on', store.showNodes);
+});
+
+// PROMPT D: Digit toggle + size slider
+document.getElementById('digitsToggle').addEventListener('click', function() {
+  store.showDigits = !store.showDigits;
+  this.classList.toggle('on', store.showDigits);
+});
+document.getElementById('digitSizeSlider').addEventListener('input', function() {
+  store.digitSize = parseInt(this.value);
+  document.getElementById('digitSizeVal').textContent = this.value;
+});
+
+// Keyboard: D = toggle digits
+document.addEventListener('keydown', e => {
+  if (e.key === 'd' || e.key === 'D') {
+    store.showDigits = !store.showDigits;
+    const t = document.getElementById('digitsToggle');
+    if (t) t.classList.toggle('on', store.showDigits);
+  }
+});
+
+// Export
+document.getElementById('exportSvgBtn').addEventListener('click', () => Exporter.exportSVG());
+document.getElementById('exportPngBtn').addEventListener('click', () => Exporter.exportPNG());
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  const keys = { '1': 'SKELETON', '2': 'GEOMETRIC', '3': 'MANDALA', '4': 'TRAIL' };
+  if (keys[e.key]) {
+    document.querySelectorAll('.mode-btn').forEach(b => {
+      const active = b.dataset.mode === keys[e.key];
+      b.classList.toggle('active', active);
+    });
+    store.mode = keys[e.key];
+  }
+  if (e.key === 's' || e.key === 'S') Exporter.exportSVG();
+  if (e.key === 'p' || e.key === 'P') Exporter.exportPNG();
+  if (e.key === 'h' || e.key === 'H') document.getElementById('hud').classList.toggle('collapsed');
+});
+</script>
+</body>
+</html>
